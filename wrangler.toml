@@ -1,0 +1,25 @@
+# wrangler.toml (Worker router)
+name = "router"
+account_id = "<your_account_id>"
+compatibility_date = "2025-06-30"
+main = "src/router.js"
+
+[env.production]
+zone_id = "<your_zone_id>"
+routes = [
+  "goldshore.org/*",
+  "www.goldshore.org/*",
+  "goldshore.foundation/*",
+  "www.goldshore.foundation/*",
+  "gearswipe.com/*",
+  "www.gearswipe.com/*",
+  "armsway.com/*",
+  "www.armsway.com/*",
+  "banproof.com/*",
+  "www.banproof.com/*"
+]
+
+# (Only add bindings you actually use)
+[[analytics_engine_datasets]]
+binding = "GOLD_ANALYTICS"
+dataset = "goldshore-events"
