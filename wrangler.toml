@@ -1,0 +1,2 @@
+# Cloudflare Pages configuration. Worker deployments should use wrangler.worker.toml.
+pages_build_output_dir = "./"
