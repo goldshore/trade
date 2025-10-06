@@ -1,0 +1,32 @@
+name = "router"
+account_id = "<your_account_id>"
+main = "src/router.js"
+compatibility_date = "2025-06-30"
+
+[vars]
+UPSTREAM_PROTOCOL = "https"
+CACHE_TTL = "300"
+PRODUCTION_ORIGIN = "https://goldshore-org.pages.dev"
+
+[env.preview]
+workers_dev = true
+
+[env.preview.vars]
+ENVIRONMENT = "preview"
+PREVIEW_ORIGIN = "https://goldshore-org.pages.dev"
+
+[env.production]
+zone_name = "goldshore.org"
+routes = [
+  "goldshore.org/*",
+  "www.goldshore.org/*"
+]
+
+[env.production.vars]
+ENVIRONMENT = "production"
+ALLOWED_HOSTNAMES = "goldshore.org,www.goldshore.org"
+CANONICAL_HOSTNAME = "goldshore.org"
+
+[[analytics_engine_datasets]]
+binding = "GOLD_ANALYTICS"
+dataset = "goldshore-events"
