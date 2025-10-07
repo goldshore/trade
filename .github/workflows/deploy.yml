@@ -3,26 +3,42 @@ on:
   push: { branches: [ main ] }
   workflow_dispatch:
 
+env:
+  NODE_ENV: production
+  MODE: paper
+  MAX_RISK_PER_TRADE: 300
+
+permissions:
+  contents: read
+  deployments: write
+  id-token: write
+  statuses: write
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  deploy:
+  build-deploy:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
-      CF_API_TOKEN:  ${{ secrets.CF_API_TOKEN }}
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Install deps
-        run: npm ci || npm i
+        run: npm ci || npm install
+
+      - name: QA gate
+        run: npm run qa
 
       - name: Build site
         run: npm run build
 
-      - name: Install Wrangler v4
-        run: npm i -D wrangler@^4
-
       - name: Deploy Worker (prod)
-        run: npx wrangler deploy --env=production
+        run: npm run deploy:prod
 
       - name: Sync DNS
         run: bash infra/scripts/upsert-goldshore-dns.sh
