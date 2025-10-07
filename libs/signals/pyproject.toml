@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "goldshore-signals"
+version = "0.1.0"
+description = "Signal regime detection scaffolding for Gold Shore services."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "pandas>=2.2"
+]
+
+[tool.hatch.build]
+packages = ["src/goldshore_signals"]

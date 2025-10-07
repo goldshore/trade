@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "goldshore-risk"
+version = "0.1.0"
+description = "Risk policy abstractions for Gold Shore services."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "pydantic>=2.6"
+]
+
+[tool.hatch.build]
+packages = ["src/goldshore_risk"]
