@@ -9,7 +9,11 @@ export default {
   async fetch(req:Request, env:Env):Promise<Response>{
     const url=new URL(req.url), origin=pick(url.hostname,env);
     const upstream=new URL(req.url.replace(url.origin,origin));
-    const res=await fetch(upstream.toString(),{method:req.method,headers:req.headers,
+    const headers=new Headers(req.headers);
+    const upstreamHost=new URL(origin).host;
+    headers.set("Host", upstreamHost);
+    headers.set("X-Forwarded-Host", upstreamHost);
+    const res=await fetch(upstream.toString(),{method:req.method,headers:headers,
       body:["GET","HEAD"].includes(req.method)?undefined:await req.blob()
     });
     const h=new Headers(res.headers);
