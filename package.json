@@ -12,7 +12,13 @@
     "deploy:prod": "wrangler deploy --env=production",
     "deploy:preview": "wrangler deploy --env=preview",
     "deploy:dev": "wrangler deploy --env=dev",
-    "qa": "node .github/workflows/local-qa.mjs"
+    "qa": "node .github/workflows/local-qa.mjs",
+    "lint": "npm run lint:web && npm run lint:python",
+    "lint:web": "npm run --if-present lint --workspace apps/web-ui && npm run --if-present lint --workspace apps/ops-console",
+    "lint:python": "ruff check services libs adapters",
+    "test": "npm run test:python",
+    "test:python": "pytest",
+    "install:python": "python -m pip install -r requirements-dev.txt"
   },
   "devDependencies": {
     "wrangler": "^4.42.0",

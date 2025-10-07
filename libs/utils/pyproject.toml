@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "goldshore-utils"
+version = "0.1.0"
+description = "Shared helpers for Gold Shore services."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.hatch.build]
+packages = ["src/goldshore_utils"]

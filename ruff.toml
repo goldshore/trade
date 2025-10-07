@@ -1,0 +1,13 @@
+[lint]
+select = ["E", "F", "I", "UP", "B", "PL"]
+ignore = []
+
+[lint.per-file-ignores]
+"apps/**/*.ts" = ["E501"]
+"apps/**/*.tsx" = ["E501"]
+"libs/options/src/goldshore_options/greeks.py" = ["PLR0913"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"

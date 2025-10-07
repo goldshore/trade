@@ -5,11 +5,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+      - name: Python lint
+        run: ruff check services libs adapters
+      - name: Python tests
+        run: pytest
       - run: npm i -D http-server lighthouse
       - name: Build
         run: npm run build
       - name: Lighthouse
         run: |
-          http-server apps/web/dist -p 4173 & sleep 2
+          npx http-server apps/web/dist -p 4173 & sleep 2
           npx lighthouse http://localhost:4173 --only-categories=performance,accessibility,seo --output=json --output-path=./lh.json --quiet
           node -e "const s=require('./lh.json');const ok=[s.categories.performance,s.categories.accessibility,s.categories.seo].every(x=>x.score>=0.9);if(!ok){console.error('Lighthouse gate failed');process.exit(1)}"
