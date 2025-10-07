@@ -11,3 +11,7 @@ package-lock.json
 pnpm-lock.yaml
 apps/web/node_modules/
 apps/web/.astro/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/
