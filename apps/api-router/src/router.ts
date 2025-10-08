@@ -1,24 +1,58 @@
+import { z } from 'zod';
 import type { ExportedHandler } from '@cloudflare/workers-types';
 
-type Env={APP_NAME:string;PRODUCTION_ASSETS?:string;PREVIEW_ASSETS?:string;DEV_ASSETS?:string};
-const pick=(host:string,env:Env)=>host.startsWith("preview.")?(env.PREVIEW_ASSETS||"https://goldshore-org-preview.pages.dev")
-:host.startsWith("dev.")?(env.DEV_ASSETS||"https://goldshore-org-dev.pages.dev")
-:(env.PRODUCTION_ASSETS||"https://goldshore-org.pages.dev");
+const envSchema = z.object({
+  APP_NAME: z.string().min(1),
+  PRODUCTION_ASSETS: z.string().url().optional(),
+  PREVIEW_ASSETS: z.string().url().optional(),
+  DEV_ASSETS: z.string().url().optional(),
+});
+
+type Env = z.infer<typeof envSchema>;
+
+const defaults = {
+  production: 'https://goldshore-org.pages.dev',
+  preview: 'https://goldshore-org-preview.pages.dev',
+  dev: 'https://goldshore-org-dev.pages.dev',
+} as const;
+
+const selectOrigin = (hostname: string, env: Env): string => {
+  if (hostname.startsWith('preview.')) {
+    return env.PREVIEW_ASSETS ?? defaults.preview;
+  }
+
+  if (hostname.startsWith('dev.')) {
+    return env.DEV_ASSETS ?? defaults.dev;
+  }
+
+  return env.PRODUCTION_ASSETS ?? defaults.production;
+};
+
+const shouldCacheLong = (pathname: string): boolean =>
+  /\.(?:js|css|png|jpg|jpeg|webp|avif|svg)$/i.test(pathname);
 
 export default {
-  async fetch(req:Request, env:Env):Promise<Response>{
-    const url=new URL(req.url), origin=pick(url.hostname,env);
-    const upstream=new URL(req.url.replace(url.origin,origin));
-    const headers=new Headers(req.headers);
-    const upstreamHost=new URL(origin).host;
-    headers.set("Host", upstreamHost);
-    headers.set("X-Forwarded-Host", upstreamHost);
-    const res=await fetch(upstream.toString(),{method:req.method,headers:headers,
-      body:["GET","HEAD"].includes(req.method)?undefined:await req.blob()
+  async fetch(request: Request, rawEnv: Env): Promise<Response> {
+    const env = envSchema.parse(rawEnv);
+    const url = new URL(request.url);
+    const origin = selectOrigin(url.hostname, env);
+    const upstreamUrl = new URL(request.url.replace(url.origin, origin));
+
+    const response = await fetch(upstreamUrl.toString(), {
+      method: request.method,
+      headers: request.headers,
+      body: ['GET', 'HEAD'].includes(request.method) ? undefined : await request.blob(),
     });
-    const h=new Headers(res.headers);
-    h.set("x-served-by", env.APP_NAME);
-    h.set("Cache-Control", url.pathname.match(/\.(?:js|css|png|jpg|webp|avif|svg)$/) ? "public, max-age=31536000, immutable" : "public, s-maxage=600, stale-while-revalidate=86400");
-    return new Response(res.body,{status:res.status,headers:h});
-  }
+
+    const headers = new Headers(response.headers);
+    headers.set('x-served-by', env.APP_NAME);
+    headers.set(
+      'Cache-Control',
+      shouldCacheLong(url.pathname)
+        ? 'public, max-age=31536000, immutable'
+        : 'public, s-maxage=600, stale-while-revalidate=86400',
+    );
+
+    return new Response(response.body, { status: response.status, headers });
+  },
 } satisfies ExportedHandler<Env>;
