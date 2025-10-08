@@ -1,0 +1,19 @@
+# Python development dependencies for Gold Shore services
+-e libs/options
+-e libs/risk
+-e libs/signals
+-e libs/utils
+-e adapters/brokers
+-e adapters/market
+-e services/planner
+-e services/executor
+-e services/marketdata
+-e services/notifier
+-e services/evaluator
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.6
+pandas>=2.2
+pytest>=8.2
+httpx>=0.27
+ruff>=0.4
