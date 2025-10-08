@@ -19,10 +19,25 @@
     "test": "npm run test:python",
     "test:python": "pytest",
     "install:python": "python -m pip install -r requirements-dev.txt"
+    "lint": "eslint \"apps/api-router/src/**/*.{ts,tsx,js}\""
   },
   "devDependencies": {
     "wrangler": "^4.42.0",
     "sharp": "^0.33.5",
-    "astro": "^4.0.0"
+    "astro": "^4.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "dotenv": "^16.4.5",
+    "eslint": "^8.57.1",
+    "husky": "^9.1.6",
+    "prettier": "^3.3.3",
+    "http-server": "^14.1.1",
+    "lighthouse": "^12.1.0",
+    "typescript": "~5.5.4"
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "npm run lint"
+    }
   }
 }
