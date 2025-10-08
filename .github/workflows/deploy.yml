@@ -4,7 +4,6 @@ on:
   workflow_dispatch:
 
 env:
-  NODE_ENV: production
   MODE: paper
   MAX_RISK_PER_TRADE: 300
 
@@ -36,9 +35,13 @@ jobs:
 
       - name: Build site
         run: npm run build
+        env:
+          NODE_ENV: production
 
       - name: Deploy Worker (prod)
         run: npm run deploy:prod
+        env:
+          NODE_ENV: production
 
       - name: Sync DNS
         run: bash infra/scripts/upsert-goldshore-dns.sh
