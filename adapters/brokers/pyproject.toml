@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "goldshore-brokers"
+version = "0.1.0"
+description = "Broker adapters for the Gold Shore trading services."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.hatch.build]
+packages = ["src/goldshore_brokers"]

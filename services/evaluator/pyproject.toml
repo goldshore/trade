@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "goldshore-evaluator"
+version = "0.1.0"
+description = "Post-trade evaluation API for Gold Shore approvals."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi>=0.110",
+  "pydantic>=2.6",
+  "uvicorn>=0.29"
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.2", "httpx>=0.27"]
+
+[tool.hatch.build]
+packages = ["src/evaluator"]

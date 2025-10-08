@@ -1,0 +1,59 @@
+name: CI (services + web)
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff pytest
+
+      - name: Install Node dependencies
+        run: npm ci || npm i
+
+      - name: Lint and test Python services
+        run: |
+          if [ -d services ]; then
+            echo "Discovered services directory; running Ruff and pytest for each package."
+            shopt -s nullglob
+            status=0
+            for service in services/*/ ; do
+              [ -d "$service" ] || continue
+              echo "\n--- $service ---"
+              if [ -f "${service}pyproject.toml" ]; then
+                pip install -e "$service"
+              elif [ -f "${service}requirements.txt" ]; then
+                pip install -r "${service}requirements.txt"
+              fi
+              ruff check "$service" || status=1
+              pytest "$service" || status=1
+            done
+            exit $status
+          else
+            echo "No services directory found; skipping Python service checks."
+          fi
+
+      - name: Build web workspace
+        run: npm run build

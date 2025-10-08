@@ -1,0 +1,204 @@
+name: Paper Trade Runbook
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: 'Optional ISO8601 start time override'
+        required: false
+      symbols:
+        description: 'Comma-separated ticker list override'
+        required: false
+      strategy:
+        description: 'Strategy slug override'
+        required: false
+      auto_execute:
+        description: 'Set to true to bypass manual approvals'
+        required: false
+        default: 'false'
+      dry_run:
+        description: 'Skip live order placement (true/false)'
+        required: false
+        default: 'false'
+  schedule:
+    # US market hours (09:30-16:00 ET ≈ 13:30-20:00 UTC)
+    - cron: '30 13-20 * * 1-5'
+
+jobs:
+  planner:
+    name: Plan session
+    runs-on: ubuntu-latest
+    outputs:
+      plan-path: ${{ steps.plan.outputs.plan_path }}
+    env:
+      ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+      ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
+      ALPACA_PAPER_BASE_URL: ${{ vars.ALPACA_PAPER_BASE_URL }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
+      OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+      SYMBOLS: ${{ inputs.symbols || vars.PAPER_TRADE_SYMBOLS || '' }}
+      STRATEGY: ${{ inputs.strategy || vars.PAPER_TRADE_STRATEGY || 'default' }}
+      START_AT: ${{ inputs.start || '' }}
+      DRY_RUN: ${{ inputs.dry_run || vars.PAPER_TRADE_DRY_RUN || 'false' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install shared Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          if [ -d services ]; then
+            shopt -s nullglob
+            for service in services/*/ ; do
+              if [ -f "${service}pyproject.toml" ]; then
+                pip install -e "$service"
+              elif [ -f "${service}requirements.txt" ]; then
+                pip install -r "${service}requirements.txt"
+              fi
+            done
+          fi
+
+      - name: Generate paper-trading plan
+        id: plan
+        run: |
+          mkdir -p artifacts
+          PLAN_PATH="artifacts/plan.json"
+          if [ -d services/planner ]; then
+            START_FLAG=""
+            if [ -n "$START_AT" ]; then
+              START_FLAG="--start $START_AT"
+            fi
+            python -m services.planner.cli \
+              --mode paper \
+              --symbols "$SYMBOLS" \
+              --strategy "$STRATEGY" \
+              --dry-run "$DRY_RUN" \
+              $START_FLAG \
+              --output "$PLAN_PATH"
+          else
+            echo "services/planner package not found; emitting empty plan stub."
+            echo '{}' > "$PLAN_PATH"
+          fi
+          echo "plan_path=$PLAN_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper-trade-plan
+          path: ${{ steps.plan.outputs.plan_path }}
+          if-no-files-found: error
+
+  notify:
+    name: Notify + gate
+    runs-on: ubuntu-latest
+    needs: planner
+    outputs:
+      approved: ${{ steps.gate.outputs.approved }}
+    env:
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      SLACK_CHANNEL: ${{ vars.SLACK_ALERT_CHANNEL }}
+      TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+      TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+      TWILIO_FROM_NUMBER: ${{ vars.TWILIO_FROM_NUMBER }}
+      TWILIO_TO_NUMBER: ${{ vars.TWILIO_TO_NUMBER }}
+      AUTO_EXECUTE: ${{ inputs.auto_execute || vars.PAPER_TRADE_AUTO_EXECUTE || 'false' }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: paper-trade-plan
+          path: plan
+
+      - name: Dispatch notifications
+        id: gate
+        run: |
+          APPROVED="$AUTO_EXECUTE"
+          if [ -d services/notifier ]; then
+            python -m services.notifier.cli \
+              --plan plan/plan.json \
+              --channel "$SLACK_CHANNEL" \
+              --twilio-from "$TWILIO_FROM_NUMBER" \
+              --twilio-to "$TWILIO_TO_NUMBER" \
+              --auto "$AUTO_EXECUTE"
+            if [ -f plan/approval.json ]; then
+              APPROVED=$(python - <<'PY'
+import json
+from pathlib import Path
+path = Path('plan/approval.json')
+try:
+    data = json.loads(path.read_text())
+    print(str(data.get('approved', False)).lower())
+except Exception:
+    print('false')
+PY
+)
+            fi
+          else
+            echo "services/notifier package not found; defaulting to AUTO_EXECUTE=$AUTO_EXECUTE"
+          fi
+          APPROVED=$(echo "$APPROVED" | tr '[:upper:]' '[:lower:]')
+          if [ -z "$APPROVED" ]; then
+            APPROVED="false"
+          fi
+          echo "approved=$APPROVED" >> "$GITHUB_OUTPUT"
+
+  executor:
+    name: Execute orders
+    runs-on: ubuntu-latest
+    needs: notify
+    if: needs.notify.outputs.approved == 'true'
+    environment:
+      name: paper-trade
+    env:
+      ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+      ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
+      ALPACA_PAPER_BASE_URL: ${{ vars.ALPACA_PAPER_BASE_URL }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
+      OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+      DRY_RUN: ${{ inputs.dry_run || vars.PAPER_TRADE_DRY_RUN || 'false' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install service dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -d services ]; then
+            shopt -s nullglob
+            for service in services/*/ ; do
+              if [ -f "${service}pyproject.toml" ]; then
+                pip install -e "$service"
+              elif [ -f "${service}requirements.txt" ]; then
+                pip install -r "${service}requirements.txt"
+              fi
+            done
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: paper-trade-plan
+          path: plan
+
+      - name: Execute plan
+        run: |
+          if [ -d services/executor ]; then
+            python -m services.executor.cli \
+              --plan plan/plan.json \
+              --dry-run "$DRY_RUN"
+          else
+            echo "services/executor package not found; skipping order execution."
+          fi
