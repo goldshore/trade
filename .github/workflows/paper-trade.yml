@@ -112,6 +112,31 @@ jobs:
       TWILIO_TO_NUMBER: ${{ vars.TWILIO_TO_NUMBER }}
       AUTO_EXECUTE: ${{ inputs.auto_execute || vars.PAPER_TRADE_AUTO_EXECUTE || 'false' }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install shared Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          if [ -d services ]; then
+            shopt -s nullglob
+            for service in services/*/ ; do
+              if [ -f "${service}pyproject.toml" ]; then
+                pip install -e "$service"
+              elif [ -f "${service}requirements.txt" ]; then
+                pip install -r "${service}requirements.txt"
+              fi
+            done
+          fi
+
       - uses: actions/download-artifact@v4
         with:
           name: paper-trade-plan
