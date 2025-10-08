@@ -1,0 +1,90 @@
+name: Nightly Evaluation
+
+on:
+  workflow_dispatch:
+  schedule:
+    # After market close (21:30 UTC ≈ 17:30 ET)
+    - cron: '30 21 * * 1-5'
+
+jobs:
+  reconcile-and-score:
+    runs-on: ubuntu-latest
+    env:
+      ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+      ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
+      ALPACA_PAPER_BASE_URL: ${{ vars.ALPACA_PAPER_BASE_URL }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
+      OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      SLACK_CHANNEL: ${{ vars.SLACK_ALERT_CHANNEL }}
+      TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+      TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+      TWILIO_FROM_NUMBER: ${{ vars.TWILIO_FROM_NUMBER }}
+      TWILIO_TO_NUMBER: ${{ vars.TWILIO_TO_NUMBER }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install service dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          if [ -d services ]; then
+            shopt -s nullglob
+            for service in services/*/ ; do
+              if [ -f "${service}pyproject.toml" ]; then
+                pip install -e "$service"
+              elif [ -f "${service}requirements.txt" ]; then
+                pip install -r "${service}requirements.txt"
+              fi
+            done
+          fi
+
+      - name: Reconcile fills
+        run: |
+          mkdir -p artifacts
+          AS_OF=$(date -u +%Y-%m-%d)
+          if [ -d services/reconciler ]; then
+            python -m services.reconciler.cli --as-of "$AS_OF" --output artifacts/fills.json
+          else
+            echo "services/reconciler package not found; emitting empty fill reconciliation."
+            echo '{}' > artifacts/fills.json
+          fi
+
+      - name: Compute performance metrics
+        run: |
+          AS_OF=$(date -u +%Y-%m-%d)
+          if [ -d services/performance ]; then
+            python -m services.performance.cli --as-of "$AS_OF" --fills artifacts/fills.json --output artifacts/performance.json
+          else
+            echo "services/performance package not found; emitting empty performance metrics."
+            echo '{}' > artifacts/performance.json
+          fi
+
+      - name: Publish scorecard
+        run: |
+          if [ -d services/notifier ]; then
+            python -m services.notifier.cli \
+              --scorecard artifacts/performance.json \
+              --channel "$SLACK_CHANNEL" \
+              --twilio-from "$TWILIO_FROM_NUMBER" \
+              --twilio-to "$TWILIO_TO_NUMBER" \
+              --mode nightly
+          else
+            echo "services/notifier package not found; skipping scorecard dispatch."
+          fi
+
+      - name: Upload nightly evaluation artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-evaluation
+          path: artifacts
+          if-no-files-found: error
