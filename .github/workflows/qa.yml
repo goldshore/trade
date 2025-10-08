@@ -16,6 +16,8 @@ jobs:
         run: ruff check services libs adapters
       - name: Python tests
         run: pytest
+      - name: Install Node dependencies
+        run: npm install --workspaces --include-workspace-root
       - run: npm i -D http-server lighthouse
       - name: Build
         run: npm run build
