@@ -1,0 +1,69 @@
+name: Deploy Admin UI to Shared Host (FTP, Basic Auth)
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "apps/admin/**"
+      - ".github/workflows/deploy-ftp.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ftp-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      - name: Build admin
+        working-directory: apps/admin
+        run: |
+          corepack enable
+          pnpm i || npm ci
+          pnpm run build || npm run build
+
+      - name: Create .htpasswd and .htaccess
+        working-directory: apps/admin/dist
+        env:
+          BASIC_AUTH_USER: ${{ secrets.BASIC_AUTH_USER }}
+          BASIC_AUTH_PASS: ${{ secrets.BASIC_AUTH_PASS }}
+          APACHE_AUTH_USERFILE_ABSPATH: ${{ secrets.APACHE_AUTH_USERFILE_ABSPATH }}
+        run: |
+          if [ -z "${BASIC_AUTH_USER}" ] || [ -z "${BASIC_AUTH_PASS}" ]; then
+            echo "BASIC_AUTH_USER and BASIC_AUTH_PASS secrets are required." >&2
+            exit 1
+          fi
+          HASH=$(openssl passwd -apr1 "${BASIC_AUTH_PASS}")
+          echo "${BASIC_AUTH_USER}:${HASH}" > .htpasswd
+
+          USERFILE="${APACHE_AUTH_USERFILE_ABSPATH:-.htpasswd}"
+
+          cat > .htaccess <<HTACCESS
+AuthType Basic
+AuthName "GoldShore Admin"
+AuthUserFile ${USERFILE}
+Require valid-user
+
+# Optional: ensure all files are protected (uncomment if needed)
+# <FilesMatch ".*">
+#   Require valid-user
+# </FilesMatch>
+HTACCESS
+
+      - name: FTP Deploy
+        uses: SamKirkland/FTP-Deploy-Action@v4
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: ${{ secrets.FTP_REMOTE_DIR }}
+          local-dir: apps/admin/dist
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            # DO NOT exclude .htaccess or .htpasswd so auth stays enforced

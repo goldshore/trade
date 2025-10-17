@@ -1,0 +1,44 @@
+name: GitHub Pages (Fallback)
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "apps/admin/**"
+      - ".github/workflows/gh-pages.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Build admin
+        working-directory: apps/admin
+        run: |
+          corepack enable
+          pnpm i || npm ci
+          pnpm run build || npm run build
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "apps/admin/dist"
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
