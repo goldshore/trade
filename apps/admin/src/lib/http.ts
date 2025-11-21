@@ -1,3 +1,4 @@
+const API_BASE_URL = "https://api.goldshore.org";
 const DEFAULT_TIMEOUT = 15000;
 const DEFAULT_RETRIES = 2;
 
@@ -53,7 +54,7 @@ export async function apiFetch(path: string, options: ApiFetchOptions = {}): Pro
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
-      const response = await fetch(path, { ...init, headers: requestHeaders, signal: controller.signal });
+      const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers: requestHeaders, signal: controller.signal });
       clearTimeout(timeoutId);
 
       if (response.status === 429 || (response.status >= 500 && response.status < 600)) {
